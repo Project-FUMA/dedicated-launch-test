@@ -1,126 +1,60 @@
 name: Dedicated Launch Test
 description: Test if specified mods can launch on dedicated server environment
 inputs:
-  extra:
-    description: Path to extra mods json
+  packwiz-server-url:
+    description: Packwiz server url
     required: false
-    default: ""
-  extra1:
-    description: Another path to extra mods json, in case you need a new one
-    required: false
-    default: ""
-  mod:
-    description: Path to the mod file
-    required: true
+    default: "http://localhost:8080/pack.toml"
 runs:
   using: composite
   steps:
-    - name: Setup
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'microsoft'
+        java-version: '17'
+    - name: Setup repo
       shell: bash
       run: |
-        git clone https://github.com/teaconmc/dedicated-launch-test.git
+        git clone https://github.com/Project-FUMA/dedicated-launch-test.git
         cd dedicated-launch-test
-        git checkout 1.21-neoforge
+        git checkout 1.19.2-forge
         cd ..
-        mkdir -p dedicated-launch-test/extra
-        mkdir -p dedicated-launch-test/extra1
         mkdir -p dedicated-launch-test/server
-    - name: Apply extra mods cache
-      uses: actions/cache@v4
-      with:
-        path: dedicated-launch-test/extra
-        key: ${{ runner.os }}-extra-${{ hashFiles(inputs.extra) }}
-        #restore-keys: ${{ runner.os }}-extra-
-    - name: Apply extra-1 mods cache
-      uses: actions/cache@v4
-      with:
-        path: dedicated-launch-test/extra1
-        key: ${{ runner.os }}-extra1-${{ hashFiles(inputs.extra1) }}
     - name: Apply server cache
       uses: actions/cache@v4
       with:
         path: dedicated-launch-test/server
-        key: ${{ runner.os }}-server1-${{ hashFiles('dedicated-launch-test/server/libraries/**') }}
-        restore-keys: ${{ runner.os }}-server1-
-    - name: Download extra mods
+        key: ${{ runner.os }}-packwiz-mc-server-${{ hashFiles('dedicated-launch-test/server/libraries/**') }}
+        restore-keys: ${{ runner.os }}-packwiz-mc-server-
+    # - name: Apply packwiz-installer cache
+    #   uses: actions/cache@v4
+    #   with:
+    #     path: dedicated-launch-test/server/packwiz-installer.jar
+    #     key: ${{ runner.os }}-packwiz-installer-${{ hashFiles('dedicated-launch-test/server/packwiz-installer.jar') }}
+    #     restore-keys: ${{ runner.os }}-packwiz-installer-
+    - name: Setup packwiz-installer
       shell: bash
-      env:
-        EXTRA_MODS: ${{ inputs.extra }}
       run: |
-        cd dedicated-launch-test/extra
-        EXTRA_MODS="../../$EXTRA_MODS"
-        if [ -f "$EXTRA_MODS" ]; then
-          for e in `jq -c '.[]' $EXTRA_MODS`; do
-            echo "$e" > tmp.json
-            name=`jq -r '.name' tmp.json`
-            url=`jq -r '.file' tmp.json`
-            if [ ! -f "$name" ]; then
-              echo "Downloading $name from $url"
-              wget -q -O "$name" "$url"
-            else
-              echo "Skipping $name, already downloaded"
-            fi
-            rm tmp.json
-          done
-        fi
-    - name: Download extra1 mods
-      shell: bash
-      env:
-        EXTRA1_MODS: ${{ inputs.extra1 }}
-      run: |
-        cd dedicated-launch-test/extra1
-        EXTRA1_MODS="../../$EXTRA1_MODS"
-        if [ -f "$EXTRA1_MODS" ]; then
-          cat $EXTRA1_MODS
-          for e in `jq -c '.[]' $EXTRA1_MODS`; do
-            echo "$e" > tmp.json
-            name=`jq -r '.name' tmp.json`
-            url=`jq -r '.file' tmp.json`
-            if [ ! -f "$name" ]; then
-              echo "Downloading $name from $url"
-              wget -q -O "$name" "$url"
-            else
-              echo "Skipping $name, already downloaded"
-            fi
-            rm tmp.json
-          done
-        fi
+        wget -O dedicated-launch-test/server/packwiz-installer-bootstrap.jar https://github.com/packwiz/packwiz-installer-bootstrap/releases/download/v0.0.3/packwiz-installer-bootstrap.jar
     - name: Setup Server
       shell: bash
+      env:
+        WIZ_SERVER_URL: ${{ inputs.packwiz-server-url }}
       run: |
         cd dedicated-launch-test/server
+        java -jar packwiz-installer-bootstrap.jar -g -s server $WIZ_SERVER_URL
         mkdir -p config
         echo 'disableConfigWatcher = true' > config/fml.toml
-        echo "Getting latest NeoForge version..."
-        #NF_VER=$(curl -s https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml | yq -p xml '.metadata.versioning.latest')
-        NF_VER=21.1.62
-        echo "Checking if NeoForge $NF_VER is installed..."
-        if ! ls libraries/net/neoforged/neoforge/$NF_VER; then
-          echo "Cannot find NeoForge $NF_VER, installing..."
-          rm -f nf-install.jar
-          curl -s -o nf-install.jar https://maven.neoforged.net/releases/net/neoforged/neoforge/$NF_VER/neoforge-$NF_VER-installer.jar
-          java -jar nf-install.jar --installServer > /dev/null 2>&1
-        else
-          echo "Found NeoForge $NF_VER"
-        fi
-        echo Using NeoForge $NF_VER
         mkdir mods || true
         echo By using this workflow, you agree with the terms set in Minecraft EULA.
         echo Get the full EULA text here: https://www.minecraft.net/en-us/eula
         echo -n "eula=true" > eula.txt
-    - name: Copy mods
-      shell: bash
-      env:
-        MOD: ${{ inputs.mod }}
-      run: |
-        cp -v dedicated-launch-test/extra/* dedicated-launch-test/server/mods/ || true
-        cp -v dedicated-launch-test/extra1/* dedicated-launch-test/server/mods/ || true
-        cp -v $MOD dedicated-launch-test/server/mods/
     - name: Launch
       shell: bash
       run: |
         cd dedicated-launch-test/server
-        ./run.sh nogui <<< "stop" &
+        ./run.sh <<< "stop" &
         for i in $(seq 60); do
           sleep 5
           jobs > running.txt
