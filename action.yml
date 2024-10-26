@@ -44,8 +44,8 @@ runs:
       run: |
         cd dedicated-launch-test/server
         java -jar packwiz-installer-bootstrap.jar -g -s server $WIZ_SERVER_URL
-        mkdir -p config
-        echo 'disableConfigWatcher = true' > config/fml.toml
+        # mkdir -p config
+        # echo 'disableConfigWatcher = true' > config/fml.toml
         mkdir mods || true
         echo By using this workflow, you agree with the terms set in Minecraft EULA.
         echo Get the full EULA text here: https://www.minecraft.net/en-us/eula
