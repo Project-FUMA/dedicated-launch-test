@@ -18,7 +18,7 @@ runs:
       run: |
         git clone https://github.com/Project-FUMA/dedicated-launch-test.git
         cd dedicated-launch-test
-        git checkout 1.19.2-forge
+        git checkout 1.20.1-forge
         cd ..
         mkdir -p dedicated-launch-test/server
     - name: Apply server cache
